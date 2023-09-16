@@ -27,11 +27,13 @@ app.use(express.json());
 
 const authRouter = require("./routes/auth.routes");
 const memberRouter = require("./routes/member.routes");
+const payment = require("./routes/payment.routes");
 
 // map URL starts:
 // app.get("*", checkUser);
 app.use("/api/auth", authRouter);
 app.use("/api/member", memberRouter);
+app.use("/api/pay", payment);
 
 
 app.use(function(err, req, res, next) {
