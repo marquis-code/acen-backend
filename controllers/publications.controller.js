@@ -1,4 +1,4 @@
-const Publications = require("../models/publications.model");
+const Publications = require("../models/publication.models");
 const mongoose = require("mongoose");
 
 module.exports.handle_new_publications = async (req, res) => {

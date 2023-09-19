@@ -1,4 +1,4 @@
-const News = require("../models/news.model");
+const News = require("../models/news.models");
 const mongoose = require("mongoose");
 
 module.exports.handle_new_news = async (req, res) => {

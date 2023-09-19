@@ -28,12 +28,18 @@ app.use(express.json());
 const authRouter = require("./routes/auth.routes");
 const memberRouter = require("./routes/member.routes");
 const payment = require("./routes/payment.routes");
+const newsRouter = require("./routes/news.routes");
+const publicationsRouter = require("./routes/publications.routes");
+const eventsRouter = require("./routes/events.routes");
 
 // map URL starts:
 // app.get("*", checkUser);
 app.use("/api/auth", authRouter);
 app.use("/api/member", memberRouter);
+app.use("/api/news", newsRouter);
+app.use("/api/publications", publicationsRouter);
 app.use("/api/pay", payment);
+app.use("/api/events", eventsRouter);
 
 
 app.use(function(err, req, res, next) {
