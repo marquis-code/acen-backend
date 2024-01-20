@@ -1,7 +1,22 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const Member = require("../models/member.model");
+const Payment = require("../models/payment.model");
 const mongoose = require("mongoose");
+const cron = require('node-cron');
+const nodemailer = require("nodemailer");
+const nodemailerMailgunTransport = require("nodemailer-mailgun-transport");
+require("dotenv").config();
+
+const auth = {
+  auth: {
+    api_key: process.env.MAILGUN_APIKEY,
+    domain: process.env.MAILGUN_DOMAIN,
+  },
+};
+const transporter = nodemailer.createTransport(
+  nodemailerMailgunTransport(auth)
+);
 module.exports.handle_new_member = async (req, res) => {
   try {
     const member = await Member.findOne({
@@ -59,6 +74,43 @@ module.exports.handle_new_member = async (req, res) => {
     newMember
       .save()
       .then(() => {
+           // Schedule a cron job
+    cron.schedule('0 0 */30 * *', () => {
+      sendReminderEmail(user.email);
+    });const paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);
+
+app.post('/pay-dues', async (req, res) => {
+  const { email, amount } = req.body; // assuming amount is in kobo for Paystack
+
+  try {
+    const response = await paystack.transaction.initialize({
+      email,
+      amount,
+    });
+    res.redirect(response.data.authorization_url);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/payment-callback', async (req, res) => {
+  const ref = req.query.reference;
+  try {
+    const verification = await paystack.transaction.verify(ref);
+
+    if (verification.data.status === 'success') {
+      // Here, save the transaction details to MongoDB and set up the cron job
+      // ...
+
+      res.send('Payment successful');
+    } else {
+      res.send('Payment failed');
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
         return res
           .status(200)
           .json({ successMessage: 'Hurry! now you are successfully registred as a member. Please login.' });
@@ -233,3 +285,62 @@ module.exports.update_member = async (req, res) => {
     return res.status(500).json({ errorMessage: "Something went wrong" });
   }
 };
+
+module.exports.member_payment = async (req, res) => {
+  const { memberId, reference, amount} = req.body
+  try {
+    const response = await axios.get(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      }
+    });
+    const data = response.data.data;
+
+    if (data.status === 'success') {
+      // Save payment details to MongoDB
+      const payment = new Payment({
+        memberId: memberId,
+        email: data.customer.email,
+        amount: amount,
+        paymentRef: data.reference,
+        status: data.status
+      });
+
+      await payment.save();
+    cron.schedule('59 23 28-31 * *', () => {
+      const date = new Date();
+      const dayOfMonth = date.getDate();
+      if ([28, 29, 30].includes(dayOfMonth) && date.getMonth() !== new Date(date.getTime() + 86400000).getMonth()) {
+          sendEmail(data.customer.email)
+      }
+      if (dayOfMonth === 31) {
+          sendEmail(member.email)
+      }
+  });
+      res.json({ message: 'Payment verified and saved', payment });
+    } else {
+      res.status(400).json({ message: 'Payment verification failed' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+
+}
+
+const sendEmail = async (email) => {
+
+  const emailOptions = {
+    to: email,
+    from: process.env.AUTH_EMAIL,
+    subject: `Thanks for paying your dues`,
+    html: `
+          <div style="box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);  border-radius: 25px; padding: 10px">
+            <h4>Thanks for paying your dues.</h4>
+            <p>Sincerely,</p>
+            <p>Thank you again!</p>
+          </div>
+          `,
+  };
+  await transporter.sendMail(emailOptions);
+}

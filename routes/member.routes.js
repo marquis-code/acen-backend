@@ -6,7 +6,8 @@ const {
   get_one_member,
   delete_member,
   update_member,
-  login_member
+  login_member,
+  member_payment
 } = require("../controllers/member.controller");
 
 const router = Router();
@@ -22,5 +23,7 @@ router.get("/:id", checkUser, get_one_member);
 router.delete("/:id", checkUser, delete_member);
 
 router.put("/:id", checkUser, update_member);
+
+router.post("/pay", checkUser, member_payment);
 
 module.exports = router;

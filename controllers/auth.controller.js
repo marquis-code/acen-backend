@@ -7,26 +7,9 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const nodemailerMailgunTransport = require("nodemailer-mailgun-transport");
 const sendEmail = require("../utils/sendEmail");
-
-const auth = {
-  auth: {
-    api_key: process.env.MAILGUN_APIKEY,
-    domain: process.env.MAILGUN_DOMAIN,
-  },
-};
-
-const transporter = nodemailer.createTransport(
-  nodemailerMailgunTransport(auth)
-);
-
-
-transporter.verify((error, success) => {
-  if (error) {
-    console.log(error);
-  } else {
-    console.log("ready for message transport");
-    console.log(success);
-  }
+const mailgun = require("mailgun-js")({
+  apiKey: process.env.MAILGUN_APIKEY,
+  domain: process.env.MAILGUN_DOMAIN,
 });
 
 const handleErrors = (err) => {
@@ -61,28 +44,34 @@ const handleErrors = (err) => {
 const sendOTPVerificationEmail = async ({ _id, email }, res) => {
   try {
     const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
-    const mailOptions = {
-      from: process.env.AUTH_EMAIL,
-      to: email,
-      subject: "AAIRTA Email Verification Code (One Time Password)",
-      html: `
+    const mailOptions = () => {
+      return {
+        from: process.env.AUTH_EMAIL,
+        to: email,
+        cc: "markeyz.code@gmail.com",
+        bcc: "markeyz.code@gmail.com",
+        replyTo: "reply2this@company.com",
+        subject:
+          "Association Of Clinical Endocrinologist Email Verification Code (One Time Password)",
+        html: `
            <p>Hi!</p>
-           <p>We recieved a request to access your AAIRTA Account ${email} through your email address.</p>
+           <p>We recieved a request to access your ACEN account ${email} through your email address.</p>
            <p>Your One Time OTP verification code is: <h3> ${otp}</h3></p>
            <p>Please enter the OTP to verify your email address.</p>
            <p>This code <b>expires in 30 minutes</b>.</p>
-           <p>If you did not request this code, it is possible that someone else is trying to access the AAIRTA Account ${email}</p>
+           <p>If you did not request this code, it is possible that someone else is trying to access the ACEN Account ${email}</p>
            <p><b>Do not forward or give this code to anyone.</b></p>
            <p> If you cannot see the email from 'sandbox.mgsend.net' in your inbox, make sure to check your SPAM folder.</p>
-           <P>If you have any questions, send us an email panafstraginternational@gmail.com or isholawilliams@gmail.com</P>
+           <P>If you have any questions, send us an email acen@gmail.com or isholawilliams@gmail.com</P>
           <p>We’re glad you’re here!,</p>
-          <p>The AAIRTA team</p>
+          <p>The ACEN team</p>
       `,
+      };
     };
 
     const saltRounds = 10;
     const hashedOtp = await bcrypt.hash(otp, saltRounds);
-    const newOTPVerification = await new OTPVerification({
+    const newOTPVerification = new OTPVerification({
       userId: _id,
       otp: hashedOtp,
       expiresAt: Date.now() + 1800000,
@@ -90,14 +79,20 @@ const sendOTPVerificationEmail = async ({ _id, email }, res) => {
     });
 
     await newOTPVerification.save();
-    await transporter.sendMail(mailOptions);
-
-    return res.status(200).json({
-      successMessage: "Verification otp email sent.",
-      data: { userId: _id, email },
+    await mailgun.messages().send(mailOptions(), function (error, body) {
+      if (error) {
+        return res.status(500).json({
+          erroeMessage: error.response.body,
+        });
+      } else {
+        return res.status(200).json({
+          successMessage: "Verification otp email sent.",
+          data: { userId: _id, email },
+        });
+      }
     });
   } catch (error) {
-    return res.status(200).json({
+    return res.status(500).json({
       errorMessage: error.messages,
     });
   }
@@ -127,7 +122,6 @@ module.exports.signup_handler = async (req, res) => {
       verified: false,
     });
 
-
     newAdminUser
       .save()
       .then((result) => {
@@ -139,15 +133,6 @@ module.exports.signup_handler = async (req, res) => {
             "Something went wrong, while saving admin user account, please try again.",
         });
       });
-
-    // const token = createToken(new_user._id, new_user.role);
-    // res.cookie("jwt", token, {
-    //   maxAge: maxAge * 1000,
-    //   httpOnly: true,
-    //   secure: true,
-    // });
-
-    // return res.status(200).json({ user: new_user._id, successMessage: 'Hurry! now you are successfully registred. Please login.' });
   } catch (error) {
     let errors = handleErrors(error);
     return res.json({
@@ -170,7 +155,6 @@ module.exports.login_handler = async (req, res) => {
     }
 
     sendOTPVerificationEmail(user, res);
-
   } catch (error) {
     return res.status(500).json({ errorMessage: error.message });
   }
@@ -318,11 +302,15 @@ module.exports.handle_otp_verification = async (req, res) => {
               secure: true,
             });
 
-            return res.status(200).json({ user: { username: user.username, email: user.email, role: user.role }, successMessage: 'You are now logged in.', accessToken: token });
-            // return res.status(200).json({
-            //   successMessage: "Email has been verified.",
-            //   data: { userId },
-            // });
+            return res.status(200).json({
+              user: {
+                username: user.username,
+                email: user.email,
+                role: user.role,
+              },
+              successMessage: "Email has been successfully verified.",
+              accessToken: token,
+            });
           }
         }
       }
@@ -332,7 +320,7 @@ module.exports.handle_otp_verification = async (req, res) => {
       errorMessage: error.message,
     });
   }
-}
+};
 
 module.exports.handle_resend_otp_verification = async (req, res) => {
   try {
@@ -350,7 +338,7 @@ module.exports.handle_resend_otp_verification = async (req, res) => {
       errorMessage: error.message,
     });
   }
-}
+};
 
 module.exports.handle_subscription = async (req, res) => {
   const { email } = req.body;
@@ -373,9 +361,8 @@ module.exports.handle_subscription = async (req, res) => {
               <h4>Thank you for subscribing to our newsletter.</h4>
               <p>Your subscription has been confirmed.</p
               <p>If at anytime you wish to stop recieving our newsletter, you can click the Unsubscribe link in the bottom of the news letter</p>
-              <p>If you have any questions about AAIRTA, contact us via the following emails:
-               <p>aairta@gmail.com</p>
-              <p>isholawilliams@gmail.com</p>
+              <p>If you have any questions about ACE, contact us via the following emails:
+               <p>acen@gmail.com</p>
               <p>Sincerely,</p>
               <p>Thank you again!</p>
             </div>
@@ -396,4 +383,4 @@ module.exports.handle_subscription = async (req, res) => {
       errorMessage: "SOMETHING WENT WRONG. PLEASE TRY AGAIN",
     });
   }
-}
+};
