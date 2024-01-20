@@ -1,7 +1,7 @@
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
-const helment = require("helmet");
+// const helment = require("helmet")
 const cors = require("cors");
 const dotenv = require("dotenv");
 dotenv.config();
@@ -21,7 +21,7 @@ const corsOptions = {
 app.use(express.json());
 app.use(cors(corsOptions));
 app.use(morgan("dev"));
-app.use(helment());
+// app.use(helment());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
