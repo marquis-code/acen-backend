@@ -24,6 +24,6 @@ router.delete("/:id", checkUser, delete_member);
 
 router.put("/:id", checkUser, update_member);
 
-router.post("/pay", checkUser, member_payment);
+router.post("/pay", member_payment);
 
 module.exports = router;

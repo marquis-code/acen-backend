@@ -5,6 +5,7 @@ const Payment = require("../models/payment.model");
 const mongoose = require("mongoose");
 const cron = require('node-cron');
 const nodemailer = require("nodemailer");
+const axios = require("axios");
 const nodemailerMailgunTransport = require("nodemailer-mailgun-transport");
 require("dotenv").config();
 
@@ -287,45 +288,27 @@ module.exports.update_member = async (req, res) => {
 };
 
 module.exports.member_payment = async (req, res) => {
-  const { memberId, reference, amount} = req.body
-  try {
-    const response = await axios.get(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      }
-    });
-    const data = response.data.data;
-
-    if (data.status === 'success') {
-      // Save payment details to MongoDB
-      const payment = new Payment({
-        memberId: memberId,
-        email: data.customer.email,
-        amount: amount,
-        paymentRef: data.reference,
-        status: data.status
-      });
-
-      await payment.save();
-    cron.schedule('59 23 28-31 * *', () => {
-      const date = new Date();
-      const dayOfMonth = date.getDate();
-      if ([28, 29, 30].includes(dayOfMonth) && date.getMonth() !== new Date(date.getTime() + 86400000).getMonth()) {
-          sendEmail(data.customer.email)
-      }
-      if (dayOfMonth === 31) {
-          sendEmail(member.email)
-      }
+  const { memberId, reference, amount, email, status} = req.body
+  const payment = new Payment({
+    memberId: memberId,
+    email: email,
+    amount: amount,
+    paymentRef: reference,
+    status: status
   });
-      res.json({ message: 'Payment verified and saved', payment });
-    } else {
-      res.status(400).json({ message: 'Payment verification failed' });
-    }
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
 
+  await payment.save();
+cron.schedule('59 23 28-31 * *', () => {
+  const date = new Date();
+  const dayOfMonth = date.getDate();
+  if ([28, 29, 30].includes(dayOfMonth) && date.getMonth() !== new Date(date.getTime() + 86400000).getMonth()) {
+      sendEmail(email)
+  }
+  if (dayOfMonth === 31) {
+      sendEmail(email)
+  }
+});
+  res.json({ message: 'Payment verified and saved', payment });
 }
 
 const sendEmail = async (email) => {
